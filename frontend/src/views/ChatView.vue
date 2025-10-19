@@ -1,0 +1,439 @@
+<template>
+  <div class="p-8 max-w-7xl mx-auto">
+    <div class="flex items-center justify-between md-4">
+      <button @click="$router.back()"
+              class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition-tranform transform hover:scale-105 shadow">
+        ←
+        Назад
+      </button>
+      <h1 class="text-3xl font-bold text-center flex-1 py-5">Чат с {{ receiver }}</h1>
+      <div v-if="statusUser === 'Online'">
+        <span class="text-green-400 text-2xl p-5">{{ statusUser }}</span>
+      </div>
+      <div v-else>
+        <span class="text-red-400 text-2xl p-5">{{ statusUser }}</span>
+      </div>
+      <div v-if="!receiverInfo || !receiverInfo.photo">
+        <CircleUserRound class="w-16 h-16 text-gray-600 group-hover:text-[#ec3606] transition"/>
+      </div>
+      <div v-else>
+        <img :src="photoUrl" alt="User Photo" class="w-16 h-16 rounded-full object-cover"/>
+      </div>
+    </div>
+    <div
+        ref="messageContainer"
+        class="bg-white rounded shadow p-4 mb-4 overflow-y-auto border border-gray-300
+         h-[50vh] min-h-[300px] max-h-[80vh]
+         sm:h-[45vh] md:h-[50vh] lg:h-[55vh] xl:h-[50vh]">
+      <div v-for="(msg, index) in messages" :key="index" class="flex"
+           :class="msg.sender === currentUser ? 'justify-end' : 'justify-start'">
+        <div :class="[
+          'mb-2 px-4 py-2 rounded-md border whitespace-pre-wrap break-words text-left',
+          msg.sender === currentUser
+            ? 'bg-blue-100 border-blue-300 text-gray-800'
+            : 'bg-gray-200 border-gray-300 text-black'
+        ]" style="max-width: 70%; word-break: break-word;">
+          <div v-if="msg.attachmentName">
+            <div v-if="isImage(msg.attachmentName)">
+              <img v-if="msg.attachmentUrl" :src="msg.attachmentUrl" alt="image" @load="scrollToBottom"/>
+            </div>
+            <div v-else-if="isVideo(msg.attachmentName)">
+              <video :src="getFileUrl(msg.attachmentId)" controls class="mt-2 max-w-xs rounded shadow"/>
+            </div>
+            <div v-else-if="isAudio(msg.attachmentName)">
+              <audio :src="getFileUrl(msg.attachmentId)" controls class="mt-2 w-full"/>
+            </div>
+            <div v-else>
+              <a :href="getFileUrl(msg.attachmentId)" target="_blank" class="text-blue-500 underline mt-2 block">
+                Скачать файл: {{ msg.attachmentName }}
+              </a>
+            </div>
+          </div>
+          <div v-else>
+            {{ msg.content }}
+          </div>
+          <div class="text-xs text-gray-500 mt-1">
+            {{ formatTime(msg.timestamp) }}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="flex gap-2 mb-2 items-center">
+      <input type="file" ref="fileInput" @change="handleFileChange" class="hidden"/>
+      <Paperclip @click="triggerFileSelect" :disabled="!selectedFile" class="cursor-pointer w-6 h-6 text-gray-700"/>
+      <textarea v-model="message" placeholder="Введите сообщение..." @keydown="handleKeydown" @input="autoResize"
+                ref="textareaRef" rows="1"
+                class="flex-1 border border-black-300 rounded p-1 resize-none overflow-hidden"/>
+      <div class="relative" ref="emojiTriggerRef">
+        <SmilePlus @click="toggleEmojiPicker" class="w-7 h-7 cursor-pointer"/>
+        <div v-if="showEmojiPicker" ref="emojiPickerRef" class="absolute bottom-12 right-0 z-50">
+          <emoji-picker @emoji-click="addEmoji"/>
+        </div>
+      </div>
+      <button @click="sendMessage" class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition">
+        Отправить
+      </button>
+      <div v-if="uploadedFileUrl">
+        <p>Файл загружен!</p>
+        <a :href="uploadedFileUrl" target="_blank">Скачать</a>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import 'emoji-picker-element'
+import {nextTick, onMounted, ref, onBeforeUnmount} from 'vue'
+import {useRoute} from 'vue-router'
+import SockJS from 'sockjs-client';
+import {Client, Stomp} from '@stomp/stompjs'
+import api from '@/api/api.js'
+import {SmilePlus, Paperclip, CircleUserRound} from 'lucide-vue-next';
+import axios from "axios";
+import router from "@/router/index.js";
+
+const route = useRoute()
+const receiver = route.params.username
+const receiverInfo = ref('')
+
+const showEmojiPicker = ref(false)
+const stompClient = ref(null)
+const messageContainer = ref(null)
+const messages = ref([])
+const message = ref('')
+const currentUser = ref('')
+const emojiPickerRef = ref(null)
+const emojiTriggerRef = ref(null)
+const textareaRef = ref(null)
+const selectedFile = ref(null)
+const uploadedFileUrl = ref(null)
+const fileId = ref(null)
+const fileInput = ref(null)
+const photoUrl = ref("")
+const statusUser = ref("")
+const onlineUsers = ref(new Map())
+
+async function loadReceiverInfo(token) {
+  try {
+    const res = await api.get(`/api/users/username/${receiver}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+    receiverInfo.value = res.data
+  } catch (err) {
+    console.error('Ошибка получения информации о пользователе', err)
+  }
+}
+
+function getFileUrl(id) {
+  return `${api.defaults.baseURL}/api/files/${id}`;
+}
+
+function isImage(name) {
+  return /\.(jpe?g|png|gif|bmp|webp)$/i.test(name);
+}
+
+function isVideo(name) {
+  return /\.(mp4|webm|ogg)$/i.test(name);
+}
+
+function isAudio(name) {
+  return /\.(mp3|wav|ogg|flac)$/i.test(name);
+}
+
+function handleFileChange(event) {
+  selectedFile.value = event.target.files[0]
+  uploadFile()
+}
+
+function triggerFileSelect() {
+  const input = fileInput.value
+  if (input) {
+    input.click()
+  }
+}
+
+async function uploadFile() {
+  if (!selectedFile.value) return
+
+  const formData = new FormData()
+  formData.append('file', selectedFile.value)
+  const token = localStorage.getItem('jwt')
+
+  try {
+    const res = await api.post(`/api/files/upload`, formData)
+    fileId.value = res.data.id
+    uploadedFileUrl.value = `${api.defaults.baseURL}/api/files/${res.data.id}`
+  } catch (err) {
+    console.log("Error upload", err)
+  }
+}
+
+function autoResize() {
+  const textarea = textareaRef.value
+  if (textarea) {
+    textarea.style.height = 'auto'
+    textarea.style.height = textarea.scrollHeight + 'px'
+  }
+}
+
+function formatTime(isoString) {
+  const date = new Date(isoString)
+  return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
+}
+
+
+function toggleEmojiPicker() {
+  showEmojiPicker.value = !showEmojiPicker.value;
+}
+
+function addEmoji(event) {
+  message.value += event.detail.unicode;
+  showEmojiPicker.value = false
+}
+
+function handleClickOutSide(event) {
+  const picker = emojiPickerRef.value
+  const trigger = emojiTriggerRef.value
+
+  if (picker && !picker.contains(event.target) && trigger && !trigger.contains(event.target)) {
+    showEmojiPicker.value = false
+  }
+}
+
+function scrollToBottom() {
+  nextTick(() => {
+    const el = messageContainer.value
+    if (el) {
+      el.scrollTop = el.scrollHeight
+    }
+  })
+}
+
+
+function parseJwt(token) {
+  try {
+    const base64Url = token.split('.')[1]
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const jsonPayload = decodeURIComponent(
+        atob(base64)
+            .split('')
+            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+    )
+    return JSON.parse(jsonPayload)
+  } catch (e) {
+    router.push('/denied')
+    return null
+  }
+}
+
+const loadPhoto = async (user) => {
+  try {
+    const res = await api.get(user.value.photo, {responseType: 'blob'})
+    const url = URL.createObjectURL(res.data)
+    photoUrl.value = url
+  } catch (err) {
+    console.error('Ошибка загрузки фото', err)
+  }
+}
+
+const loadMessageHistory = async () => {
+  try {
+    const res = await api.get(`/api/messages/${receiver}`)
+    messages.value = await Promise.all(
+        res.data.map(async (msg) => {
+          if (msg.attachmentId && isImage(msg.attachmentName)) {
+            try {
+              const fileRes = await api.get(`/api/files/${msg.attachmentId}`, {
+                responseType: "blob",
+              })
+              const blobUrl = URL.createObjectURL(fileRes.data)
+              return {...msg, attachmentUrl: blobUrl}
+            } catch (e) {
+              console.error("Ошибка загрузки вложения", e)
+              return {...msg, attachmentUrl: null}
+            }
+          }
+          return {...msg, attachmentUrl: null}
+        })
+    )
+  } catch (err) {
+    console.error("Ошибка загрузки истории", err)
+  }
+}
+
+let heartBeatInterval = null
+
+onMounted(async () => {
+
+  if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+    await Notification.requestPermission()
+  }
+
+  const token = localStorage.getItem('jwt')
+  const payload = parseJwt(token)
+  currentUser.value = payload?.sub || 'anonymous'
+
+  await loadReceiverInfo(token)
+
+  await loadMessageHistory()
+  scrollToBottom()
+
+  stompClient.value = new Client({
+    webSocketFactory: () => new SockJS(`http://192.168.0.16:8080/ws?token=${token}`),
+    // debug: (msg) => console.log("debug = " + msg),
+    reconnectDelay: 5000,
+    onConnect: async (frame) => {
+
+      stompClient.value.subscribe('/user/' + currentUser.value + "/queue/messages", (msg) => {
+        const messageBody = JSON.parse(msg.body);
+        messages.value = [...messages.value, messageBody];
+        scrollToBottom()
+
+        if (document.visibilityState !== 'visible' && Notification.permission === 'granted') {
+          new Notification(`Новое сообщение от ${messageBody.sender}`, {
+            body: messageBody.content,
+            icon: '/loginicon.ico'
+          })
+        }
+      })
+
+      await getOnlineUsers()
+      await connectToChat()
+    },
+    onStompError: (frame) => {
+      console.error('Broker reported error: ' + frame.headers['message'])
+    },
+  })
+
+  stompClient.value.activate()
+  document.addEventListener('click', handleClickOutSide)
+  await nextTick(() => {
+    autoResize()
+  })
+  await loadPhoto(receiverInfo)
+  scrollToBottom()
+})
+
+async function getOnlineUsers() {
+  stompClient.value.subscribe(`/user/${currentUser.value}/queue/online-users`, (msg) => {
+    const body = JSON.parse(msg.body)
+    if (body.type === "online-list" && body.users) {
+      onlineUsers.value = new Map(Object.entries(body.users))
+      statusUser.value = onlineUsers.value.has(receiver) ? "Online" : "Offline"
+    }
+  })
+}
+
+async function connectToChat() {
+  stompClient.value.subscribe('/topic/public', (msg) => {
+    const body = JSON.parse(msg.body)
+
+    if (body.type === 'connect') {
+      onlineUsers.value.set(body.username, body.time)
+    } else if (body.type === 'disconnect') {
+      onlineUsers.value.delete(body.username)
+    }
+
+    statusUser.value = onlineUsers.value.has(receiver) ? 'Online' : 'Offline'
+
+  })
+
+  stompClient.value.publish({
+    destination: '/app/connect',
+    body: currentUser.value,
+  })
+
+  console.log('connected = ' + currentUser.value)
+
+  heartBeatInterval = setInterval(sendPing, 1000)
+}
+
+
+function sendPing() {
+  if (stompClient.value && stompClient.value.connected) {
+    stompClient.value.publish({
+      destination: '/app/ping',
+      body: currentUser.value,
+    })
+  }
+}
+
+
+onBeforeUnmount(() => {
+  if (heartBeatInterval) clearInterval(heartBeatInterval)
+  disconnectFromChat()
+  document.removeEventListener('click', handleClickOutSide)
+})
+
+function disconnectFromChat() {
+  if (stompClient.value && stompClient.value.connected) {
+    stompClient.value.publish({
+      destination: '/app/disconnect',
+      body: currentUser.value,
+    })
+    stompClient.value.deactivate();
+    console.log('disconnectFromChat = ', currentUser.value)
+  }
+}
+
+function handleKeydown(event) {
+  if (event.key === "Enter") {
+    if (event.shiftKey) {
+      message.value += '\n'
+      event.preventDefault()
+      nextTick(() => autoResize())
+    } else {
+      event.preventDefault()
+      sendMessage()
+    }
+  }
+}
+
+async function sendMessage() {
+
+  if (!message.value.trim() && !fileId.value) return;
+
+  const tempUrl = selectedFile.value ? URL.createObjectURL(selectedFile.value) : null
+
+  const msg = {
+    sender: currentUser.value,
+    receiver: receiver,
+    content: message.value,
+    fileId: fileId.value,
+    attachmentId: fileId.value,
+    attachmentName: selectedFile.value?.name || null,
+    attachmentUrl: tempUrl,
+    timestamp: new Date().toISOString()
+  }
+
+  stompClient.value.publish({
+    destination: '/app/chat',
+    body: JSON.stringify(msg),
+  })
+
+  console.log("sending msg = ", msg)
+
+  messages.value.push({
+    ...msg,
+    attachmentId: fileId.value,
+    attachmentName: selectedFile.value?.name || null,
+  });
+
+  await nextTick();
+  scrollToBottom();
+
+  message.value = ''
+  fileId.value = null
+  selectedFile.value = null
+  uploadedFileUrl.value = null
+
+  await nextTick(() => {
+    const textarea = textareaRef.value
+    if (textarea) textarea.style.height = 'auto'
+  })
+}
+
+</script>

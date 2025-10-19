@@ -1,0 +1,44 @@
+file:
+  upload-dir: uploads
+  photo-dir: uploads/photo
+
+server:
+  error:
+    include-message: always
+    include-binding-errors: always
+
+spring:
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: true
+  servlet:
+    multipart:
+      max-file-size: 50GB
+      max-request-size: 50GB
+
+token:
+  signing:
+    key: ${JWT_SECRET}
