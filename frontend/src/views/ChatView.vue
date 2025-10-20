@@ -384,10 +384,6 @@ async function connectToChat() {
 function sendPing() {
   if (stompClient.value && stompClient.value.connected) {
     stompClient.value.publish({
-      destination: '/app/ping',
-      body: currentUser.value,
-    })
-    stompClient.value.publish({
       destination: '/app/update-ping',
       body: currentUser.value
     })
