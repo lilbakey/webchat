@@ -58,24 +58,54 @@
         </div>
       </div>
     </div>
-    <div class="flex gap-2 mb-2 items-center">
-      <input type="file" ref="fileInput" @change="handleFileChange" class="hidden"/>
-      <Paperclip @click="triggerFileSelect" :disabled="!selectedFile" class="cursor-pointer w-6 h-6 text-gray-700"/>
-      <textarea v-model="message" placeholder="Введите сообщение..." @keydown="handleKeydown" @input="autoResize"
-                ref="textareaRef" rows="1"
-                class="flex-1 border border-black-300 rounded p-1 resize-none overflow-hidden"/>
-      <div class="relative" ref="emojiTriggerRef">
-        <SmilePlus @click="toggleEmojiPicker" class="w-7 h-7 cursor-pointer"/>
-        <div v-if="showEmojiPicker" ref="emojiPickerRef" class="absolute bottom-12 right-0 z-50">
+    <div class="flex items-center gap-2 mb-2">
+      <input
+          type="file"
+          ref="fileInput"
+          @change="handleFileChange"
+          class="hidden"
+      />
+      <Paperclip
+          @click="triggerFileSelect"
+          class="cursor-pointer w-6 h-6 text-gray-700"
+      />
+      <textarea
+          v-model="message"
+          placeholder="Введите сообщение..."
+          @input="autoResize"
+          ref="textareaRef"
+          rows="1"
+          @keydown="handleKeydown"
+          class="flex-1 min-h-[2.5rem] border border-gray-300 rounded p-2 resize-none overflow-hidden box-border transition-[height] duration-150 ease-in-out"
+      />
+      <div class="relative flex-shrink-0" ref="emojiTriggerRef">
+        <SmilePlus
+            @click="toggleEmojiPicker"
+            class="w-7 h-7 cursor-pointer"
+        />
+        <div
+            v-if="showEmojiPicker"
+            ref="emojiPickerRef"
+            class="absolute bottom-12 right-0 z-50"
+        >
           <emoji-picker @emoji-click="addEmoji"/>
         </div>
       </div>
-      <button @click="sendMessage" class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition">
+      <button
+          @click="sendMessage"
+          class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition"
+      >
         Отправить
       </button>
-      <div v-if="uploadedFileUrl">
+      <div v-if="uploadedFileUrl" class="text-sm">
         <p>Файл загружен!</p>
-        <a :href="uploadedFileUrl" target="_blank">Скачать</a>
+        <a
+            :href="uploadedFileUrl"
+            target="_blank"
+            class="text-blue-500 underline"
+        >
+          Скачать
+        </a>
       </div>
     </div>
   </div>
@@ -302,6 +332,8 @@ onMounted(async () => {
 
       await getOnlineUsers()
       await connectToChat()
+      heartBeatInterval = setInterval(sendPing, 1000)
+
     },
     onStompError: (frame) => {
       console.error('Broker reported error: ' + frame.headers['message'])
@@ -346,9 +378,6 @@ async function connectToChat() {
     body: currentUser.value,
   })
 
-  console.log('connected = ' + currentUser.value)
-
-  heartBeatInterval = setInterval(sendPing, 1000)
 }
 
 
@@ -358,6 +387,11 @@ function sendPing() {
       destination: '/app/ping',
       body: currentUser.value,
     })
+    stompClient.value.publish({
+      destination: '/app/update-ping',
+      body: currentUser.value
+    })
+    console.log("ping: " + currentUser.value)
   }
 }
 
