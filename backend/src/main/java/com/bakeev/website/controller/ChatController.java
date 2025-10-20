@@ -68,7 +68,7 @@ public class ChatController {
         onlineUserService.userOnline(username);
         simpMessagingTemplate.convertAndSend("/topic/public",
                 Map.of("username", username, "type", "connect"));
-        
+
         simpMessagingTemplate.convertAndSendToUser(username, "/queue/online-users",
                 Map.of("type", "online-list", "users", onlineUserService.getOnlineUsers()));
     }
@@ -77,12 +77,19 @@ public class ChatController {
     public void checkInactiveUsers() {
         LocalDateTime now = LocalDateTime.now();
         onlineUserService.getOnlineUsers().forEach((username, lastPing) -> {
-            if (lastPing.isBefore(now.minusSeconds(30))) {
+            if (lastPing.isBefore(now.minusSeconds(5))) {
                 onlineUserService.userOffline(username);
                 simpMessagingTemplate.convertAndSend("/topic/public",
                         Map.of("username", username, "type", "disconnect"));
             }
         });
+    }
+
+    @MessageMapping("/update-ping")
+    public void updatePing(String username) {
+        onlineUserService.updatePing(username);
+        simpMessagingTemplate.convertAndSend("/topic/public", Map.of("username", username,
+                "time", LocalDateTime.now()));
     }
 
     @GetMapping("/messages/{withUser}")
