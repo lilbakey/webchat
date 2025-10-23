@@ -12,6 +12,7 @@ public class UserMapper {
         dto.setReal(user.getReal());
         dto.setEmail(user.getEmail());
         dto.setRole(user.getRole());
+        dto.setLastSeen(user.getLastSeen());
         return dto;
     }
 
@@ -21,5 +22,6 @@ public class UserMapper {
         user.setReal(dto.getReal());
         user.setEmail(dto.getEmail());
         user.setRole(dto.getRole());
+        user.setLastSeen(dto.getLastSeen());
     }
 }

@@ -38,6 +38,7 @@ public class AuthenticationService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .real(request.getPassword())
                 .role(Role.ROLE_USER)
+                .lastSeen(LocalDateTime.now())
                 .build();
 
         userService.create(user);

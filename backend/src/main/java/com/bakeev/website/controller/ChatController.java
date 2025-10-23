@@ -6,6 +6,7 @@ import com.bakeev.website.repository.ChatMessageRepository;
 import com.bakeev.website.service.ChatService;
 import com.bakeev.website.service.FileService;
 import com.bakeev.website.service.OnlineUserService;
+import com.bakeev.website.service.UserService;
 import com.bakeev.website.utils.MessageDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -39,6 +40,7 @@ public class ChatController {
     private final FileService fileService;
     private final OnlineUserService onlineUserService;
     private final SimpMessagingTemplate simpMessagingTemplate;
+    private final UserService userService;
 
 
     @MessageMapping("/chat")
@@ -88,8 +90,9 @@ public class ChatController {
     @MessageMapping("/update-ping")
     public void updatePing(String username) {
         onlineUserService.updatePing(username);
+        userService.updateLastSeen(username);
         simpMessagingTemplate.convertAndSend("/topic/public", Map.of("username", username,
-                "time", LocalDateTime.now()));
+                "type", "time", "time", userService.getLastSeen(username)));
     }
 
     @GetMapping("/messages/{withUser}")

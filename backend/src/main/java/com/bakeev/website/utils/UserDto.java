@@ -3,6 +3,8 @@ package com.bakeev.website.utils;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 @Getter
 @Setter
 public class UserDto {
@@ -12,4 +14,5 @@ public class UserDto {
     private String real;
     private String email;
     private Role role;
+    private LocalDateTime lastSeen;
 }

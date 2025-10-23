@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -69,6 +70,7 @@ public class UserService {
         user.setReal(updateUser.getReal());
         user.setEmail(updateUser.getEmail());
         user.setRole(updateUser.getRole());
+        user.setLastSeen(updateUser.getLastSeen());
 
         return userRepository.save(user);
     }
@@ -92,6 +94,15 @@ public class UserService {
             user.setPhoto(null);
             userRepository.save(user);
         }
+    }
+
+    public LocalDateTime getLastSeen(String username) {
+        User user = getByUsername(username);
+        return user.getLastSeen();
+    }
+
+    public void updateLastSeen(String username) {
+        userRepository.updateLastSeen(username, LocalDateTime.now());
     }
 
 }
