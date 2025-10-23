@@ -11,26 +11,44 @@
     </div>
     <div v-else>
       <div class="p-8 max-w-7xl mx-auto">
-        <div class="flex items-center justify-between md-4">
-          <button @click="$router.back()"
-                  class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition-tranform transform hover:scale-105 shadow">
-            ←
-            Назад
+        <div class="flex items-center justify-between w-full py-4 px-2 border-b border-gray-200">
+          <button
+              @click="$router.back()"
+              class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition-transform transform hover:scale-105 shadow text-sm sm:text-base"
+          >
+            ← Назад
           </button>
-          <h1 class="text-3xl font-bold text-center flex-1 py-5">Чат с {{ receiver }}</h1>
-          <div v-if="statusUser === 'Online'">
-            <span class="text-green-400 text-2xl p-5">{{ statusUser }}</span>
+          <div class="absolute left-1/2 transform -translate-x-1/2 text-center">
+            <div v-if="isReceiverTyping" class="animate-pulse">
+              <h1 class="text-xl sm:text-2xl font-semibold text-gray-700 italic">
+                {{ receiver }} печатает...
+              </h1>
+            </div>
+            <div v-else>
+              <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">{{ receiver }}</h1>
+            </div>
           </div>
-          <div v-else>
-            <span class="text-red-400 text-2xl p-5">{{ statusUser }} {{
-                convertLastSeen(receiverInfo.lastSeen)
-              }} </span>
-          </div>
-          <div v-if="!receiverInfo || !receiverInfo.photo">
-            <CircleUserRound class="w-16 h-16 text-gray-600 group-hover:text-[#ec3606] transition"/>
-          </div>
-          <div v-else>
-            <img :src="photoUrl" alt="User Photo" class="w-16 h-16 rounded-full object-cover"/>
+          <div class="flex items-center gap-3">
+            <div class="flex flex-col items-end leading-tight">
+              <div v-if="statusUser === 'Online'">
+                <span class="text-green-500 text-sm sm:text-base font-medium">В сети</span>
+              </div>
+              <div v-else>
+        <span class="text-red-400 text-sm sm:text-base font-medium">
+          Был(а) в сети {{ convertLastSeen(receiverInfo.lastSeen) }}
+        </span>
+              </div>
+            </div>
+            <div v-if="!receiverInfo || !receiverInfo.photo">
+              <CircleUserRound class="w-12 h-12 sm:w-16 sm:h-16 text-gray-600 group-hover:text-[#ec3606] transition"/>
+            </div>
+            <div v-else>
+              <img
+                  :src="photoUrl"
+                  alt="User Photo"
+                  class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border border-gray-300 shadow-sm"
+              />
+            </div>
           </div>
         </div>
         <div
@@ -85,7 +103,7 @@
           <textarea
               v-model="message"
               placeholder="Введите сообщение..."
-              @input="autoResize"
+              @input="handleTyping"
               ref="textareaRef"
               rows="1"
               @keydown="handleKeydown"
@@ -159,6 +177,8 @@ const photoUrl = ref("")
 const statusUser = ref("")
 const onlineUsers = ref(new Map())
 const isLoading = ref(false)
+const isReceiverTyping = ref(false)
+let typingTimeout = false
 
 async function loadReceiverInfo(token) {
   try {
@@ -225,13 +245,41 @@ function autoResize() {
   }
 }
 
+function handleTyping() {
+  if (stompClient.value && stompClient.value.connected) {
+    stompClient.value.publish({
+          destination: '/app/typing',
+          body: JSON.stringify({
+            username: currentUser.value,
+            receiver: receiver,
+            typing: true,
+          })
+        }
+    )
+  }
+  clearTimeout(typingTimeout)
+  typingTimeout = setTimeout(() => {
+    if (stompClient.value && stompClient.value.connected) {
+      stompClient.value.publish({
+        destination: '/app/typing',
+        body: JSON.stringify({
+          username: currentUser.value,
+          receiver: receiver,
+          typing: false,
+        })
+      })
+      isReceiverTyping.value = false
+    }
+  }, 1500)
+}
+
 function convertLastSeen(lastSeen) {
   const diffMs = Date.now() - new Date(lastSeen).getTime(); // разница в мс
   const diffSec = Math.floor(diffMs / 1000);
   const diffMin = Math.floor(diffSec / 60);
   const diffHours = Math.floor(diffMin / 60);
   const diffDays = Math.floor(diffHours / 24);
-  
+
   if (diffSec < 5) return "только что";
   if (diffSec < 60) return `${diffSec} сек. назад`;
   if (diffMin < 60) return `${diffMin} мин. назад`;
@@ -354,19 +402,8 @@ onMounted(async () => {
     reconnectDelay: 5000,
     onConnect: async (frame) => {
 
-      stompClient.value.subscribe('/user/' + currentUser.value + "/queue/messages", (msg) => {
-        const messageBody = JSON.parse(msg.body);
-        messages.value = [...messages.value, messageBody];
-        scrollToBottom()
-
-        if (document.visibilityState !== 'visible' && Notification.permission === 'granted') {
-          new Notification(`Новое сообщение от ${messageBody.sender}`, {
-            body: messageBody.content,
-            icon: '/loginicon.ico'
-          })
-        }
-      })
-
+      await subscribeToMessages()
+      await subscribeTyping()
       await getOnlineUsers()
       await connectToChat()
       heartBeatInterval = setInterval(sendPing, 1000)
@@ -385,6 +422,32 @@ onMounted(async () => {
   await loadPhoto(receiverInfo)
   scrollToBottom()
 })
+
+async function subscribeToMessages() {
+  stompClient.value.subscribe('/user/' + currentUser.value + "/queue/messages", (msg) => {
+    const messageBody = JSON.parse(msg.body);
+    messages.value = [...messages.value, messageBody];
+    scrollToBottom()
+
+    if (document.visibilityState !== 'visible' && Notification.permission === 'granted') {
+      new Notification(`Новое сообщение от ${messageBody.sender}`, {
+        body: messageBody.content,
+        icon: '/loginicon.ico'
+      })
+    }
+  })
+}
+
+async function subscribeTyping() {
+  stompClient.value.subscribe('/user/' + currentUser.value + "/queue/typing", (msg) => {
+        console.log(msg.body)
+        const body = JSON.parse(msg.body);
+        if (body.username === receiver) {
+          isReceiverTyping.value = body.typing
+        }
+      }
+  )
+}
 
 async function getOnlineUsers() {
   stompClient.value.subscribe(`/user/${currentUser.value}/queue/online-users`, (msg) => {
