@@ -27,6 +27,7 @@ import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @Controller
@@ -93,6 +94,18 @@ public class ChatController {
         userService.updateLastSeen(username);
         simpMessagingTemplate.convertAndSend("/topic/public", Map.of("username", username,
                 "type", "time", "time", userService.getLastSeen(username)));
+    }
+
+    @MessageMapping("/typing")
+    public void typing(@Payload Map<String, Object> payload, Principal principal) {
+        String sender = principal.getName();
+        String receiver = (String) payload.get("receiver");
+        boolean isTyping = (Boolean) payload.get("typing");
+        simpMessagingTemplate.convertAndSendToUser(
+                receiver,
+                "/queue/typing",
+                Map.of("username", sender, "typing", isTyping)
+        );
     }
 
     @GetMapping("/messages/{withUser}")
