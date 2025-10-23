@@ -1,115 +1,131 @@
 <template>
   <div class="p-8 max-w-7xl mx-auto">
-    <div class="flex items-center justify-between md-4">
-      <button @click="$router.back()"
-              class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition-tranform transform hover:scale-105 shadow">
-        ←
-        Назад
-      </button>
-      <h1 class="text-3xl font-bold text-center flex-1 py-5">Чат с {{ receiver }}</h1>
-      <div v-if="statusUser === 'Online'">
-        <span class="text-green-400 text-2xl p-5">{{ statusUser }}</span>
-      </div>
-      <div v-else>
-        <span class="text-red-400 text-2xl p-5">{{ statusUser }}</span>
-      </div>
-      <div v-if="!receiverInfo || !receiverInfo.photo">
-        <CircleUserRound class="w-16 h-16 text-gray-600 group-hover:text-[#ec3606] transition"/>
-      </div>
-      <div v-else>
-        <img :src="photoUrl" alt="User Photo" class="w-16 h-16 rounded-full object-cover"/>
-      </div>
+    <div v-if="isLoading" class="flex flex-col items-center justify-center h-screen">
+      <svg class="animate-spin h-10 w-10 text-[#ec3606]" xmlns="http://www.w3.org/2000/svg" fill="none"
+           viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor"
+              d="M4 12a8 8 0 018-8v8z"></path>
+      </svg>
+      <p class="mt-4 text-gray-600 text-lg">Загрузка чата...</p>
     </div>
-    <div
-        ref="messageContainer"
-        class="bg-white rounded shadow p-4 mb-4 overflow-y-auto border border-gray-300
+    <div v-else>
+      <div class="p-8 max-w-7xl mx-auto">
+        <div class="flex items-center justify-between md-4">
+          <button @click="$router.back()"
+                  class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition-tranform transform hover:scale-105 shadow">
+            ←
+            Назад
+          </button>
+          <h1 class="text-3xl font-bold text-center flex-1 py-5">Чат с {{ receiver }}</h1>
+          <div v-if="statusUser === 'Online'">
+            <span class="text-green-400 text-2xl p-5">{{ statusUser }}</span>
+          </div>
+          <div v-else>
+            <span class="text-red-400 text-2xl p-5">{{ statusUser }} {{
+                convertLastSeen(receiverInfo.lastSeen)
+              }} </span>
+          </div>
+          <div v-if="!receiverInfo || !receiverInfo.photo">
+            <CircleUserRound class="w-16 h-16 text-gray-600 group-hover:text-[#ec3606] transition"/>
+          </div>
+          <div v-else>
+            <img :src="photoUrl" alt="User Photo" class="w-16 h-16 rounded-full object-cover"/>
+          </div>
+        </div>
+        <div
+            ref="messageContainer"
+            class="bg-white rounded shadow p-4 mb-4 overflow-y-auto border border-gray-300
          h-[50vh] min-h-[300px] max-h-[80vh]
          sm:h-[45vh] md:h-[50vh] lg:h-[55vh] xl:h-[50vh]">
-      <div v-for="(msg, index) in messages" :key="index" class="flex"
-           :class="msg.sender === currentUser ? 'justify-end' : 'justify-start'">
-        <div :class="[
+          <div v-for="(msg, index) in messages" :key="index" class="flex"
+               :class="msg.sender === currentUser ? 'justify-end' : 'justify-start'">
+            <div :class="[
           'mb-2 px-4 py-2 rounded-md border whitespace-pre-wrap break-words text-left',
           msg.sender === currentUser
             ? 'bg-blue-100 border-blue-300 text-gray-800'
             : 'bg-gray-200 border-gray-300 text-black'
         ]" style="max-width: 70%; word-break: break-word;">
-          <div v-if="msg.attachmentName">
-            <div v-if="isImage(msg.attachmentName)">
-              <img v-if="msg.attachmentUrl" :src="msg.attachmentUrl" alt="image" @load="scrollToBottom"/>
+              <div v-if="msg.attachmentName">
+                <div v-if="isImage(msg.attachmentName)">
+                  <img v-if="msg.attachmentUrl" :src="msg.attachmentUrl" alt="image" @load="scrollToBottom"/>
+                </div>
+                <div v-else-if="isVideo(msg.attachmentName)">
+                  <video :src="getFileUrl(msg.attachmentId)" controls class="mt-2 max-w-xs rounded shadow"/>
+                </div>
+                <div v-else-if="isAudio(msg.attachmentName)">
+                  <audio :src="getFileUrl(msg.attachmentId)" controls class="mt-2 w-full"/>
+                </div>
+                <div v-else>
+                  <a :href="getFileUrl(msg.attachmentId)" target="_blank" class="text-blue-500 underline mt-2 block">
+                    Скачать файл: {{ msg.attachmentName }}
+                  </a>
+                </div>
+              </div>
+              <div v-else>
+                {{ msg.content }}
+              </div>
+              <div class="text-xs text-gray-500 mt-1">
+                {{ formatTime(msg.timestamp) }}
+              </div>
             </div>
-            <div v-else-if="isVideo(msg.attachmentName)">
-              <video :src="getFileUrl(msg.attachmentId)" controls class="mt-2 max-w-xs rounded shadow"/>
-            </div>
-            <div v-else-if="isAudio(msg.attachmentName)">
-              <audio :src="getFileUrl(msg.attachmentId)" controls class="mt-2 w-full"/>
-            </div>
-            <div v-else>
-              <a :href="getFileUrl(msg.attachmentId)" target="_blank" class="text-blue-500 underline mt-2 block">
-                Скачать файл: {{ msg.attachmentName }}
-              </a>
-            </div>
-          </div>
-          <div v-else>
-            {{ msg.content }}
-          </div>
-          <div class="text-xs text-gray-500 mt-1">
-            {{ formatTime(msg.timestamp) }}
           </div>
         </div>
-      </div>
-    </div>
-    <div class="flex items-center gap-2 mb-2">
-      <input
-          type="file"
-          ref="fileInput"
-          @change="handleFileChange"
-          class="hidden"
-      />
-      <Paperclip
-          @click="triggerFileSelect"
-          class="cursor-pointer w-6 h-6 text-gray-700"
-      />
-      <textarea
-          v-model="message"
-          placeholder="Введите сообщение..."
-          @input="autoResize"
-          ref="textareaRef"
-          rows="1"
-          @keydown="handleKeydown"
-          class="flex-1 min-h-[2.5rem] border border-gray-300 rounded p-2 resize-none overflow-hidden box-border transition-[height] duration-150 ease-in-out"
-      />
-      <div class="relative flex-shrink-0" ref="emojiTriggerRef">
-        <SmilePlus
-            @click="toggleEmojiPicker"
-            class="w-7 h-7 cursor-pointer"
-        />
-        <div
-            v-if="showEmojiPicker"
-            ref="emojiPickerRef"
-            class="absolute bottom-12 right-0 z-50"
-        >
-          <emoji-picker @emoji-click="addEmoji"/>
+        <div class="flex items-center gap-2 mb-2">
+          <input
+              type="file"
+              ref="fileInput"
+              @change="handleFileChange"
+              class="hidden"
+          />
+          <Paperclip
+              @click="triggerFileSelect"
+              class="cursor-pointer w-6 h-6 text-gray-700"
+          />
+          <textarea
+              v-model="message"
+              placeholder="Введите сообщение..."
+              @input="autoResize"
+              ref="textareaRef"
+              rows="1"
+              @keydown="handleKeydown"
+              class="flex-1 min-h-[2.5rem] border border-gray-300 rounded p-2 resize-none overflow-hidden box-border transition-[height] duration-150 ease-in-out"
+          />
+          <div class="relative flex-shrink-0" ref="emojiTriggerRef">
+            <SmilePlus
+                @click="toggleEmojiPicker"
+                class="w-7 h-7 cursor-pointer"
+            />
+            <div
+                v-if="showEmojiPicker"
+                ref="emojiPickerRef"
+                class="absolute bottom-12 right-0 z-50"
+            >
+              <emoji-picker @emoji-click="addEmoji"/>
+            </div>
+          </div>
+          <button
+              @click="sendMessage"
+              class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition"
+          >
+            Отправить
+          </button>
+          <div v-if="uploadedFileUrl" class="text-sm">
+            <p>Файл загружен!</p>
+            <a
+                :href="uploadedFileUrl"
+                target="_blank"
+                class="text-blue-500 underline"
+            >
+              Скачать
+            </a>
+          </div>
         </div>
-      </div>
-      <button
-          @click="sendMessage"
-          class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition"
-      >
-        Отправить
-      </button>
-      <div v-if="uploadedFileUrl" class="text-sm">
-        <p>Файл загружен!</p>
-        <a
-            :href="uploadedFileUrl"
-            target="_blank"
-            class="text-blue-500 underline"
-        >
-          Скачать
-        </a>
       </div>
     </div>
   </div>
 </template>
+
 
 <script setup>
 import 'emoji-picker-element'
@@ -142,6 +158,7 @@ const fileInput = ref(null)
 const photoUrl = ref("")
 const statusUser = ref("")
 const onlineUsers = ref(new Map())
+const isLoading = ref(false)
 
 async function loadReceiverInfo(token) {
   try {
@@ -206,6 +223,24 @@ function autoResize() {
     textarea.style.height = 'auto'
     textarea.style.height = textarea.scrollHeight + 'px'
   }
+}
+
+function convertLastSeen(lastSeen) {
+  const diffMs = Date.now() - new Date(lastSeen).getTime(); // разница в мс
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHours = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffSec < 5) return "только что";
+  if (diffSec < 60) return `${diffSec} сек. назад`;
+  if (diffMin < 60) return `${diffMin} мин. назад`;
+  if (diffHours < 24) return `${diffHours} ч. назад`;
+  if (diffDays === 1) return "вчера";
+  if (diffDays < 7) return `${diffDays} дн. назад`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} нед. назад`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)} мес. назад`;
+  return `${Math.floor(diffDays / 365)} г. назад`;
 }
 
 function formatTime(isoString) {
@@ -298,6 +333,8 @@ let heartBeatInterval = null
 
 onMounted(async () => {
 
+  isLoading.value = true
+
   if (Notification.permission !== "granted" && Notification.permission !== "denied") {
     await Notification.requestPermission()
   }
@@ -339,7 +376,7 @@ onMounted(async () => {
       console.error('Broker reported error: ' + frame.headers['message'])
     },
   })
-
+  isLoading.value = false
   stompClient.value.activate()
   document.addEventListener('click', handleClickOutSide)
   await nextTick(() => {
@@ -367,6 +404,10 @@ async function connectToChat() {
       onlineUsers.value.set(body.username, body.time)
     } else if (body.type === 'disconnect') {
       onlineUsers.value.delete(body.username)
+      if (body.username === receiver) {
+        const token = localStorage.getItem('jwt')
+        loadReceiverInfo(token)
+      }
     }
 
     statusUser.value = onlineUsers.value.has(receiver) ? 'Online' : 'Offline'
@@ -405,7 +446,6 @@ function disconnectFromChat() {
       body: currentUser.value,
     })
     stompClient.value.deactivate();
-    console.log('disconnectFromChat = ', currentUser.value)
   }
 }
 
