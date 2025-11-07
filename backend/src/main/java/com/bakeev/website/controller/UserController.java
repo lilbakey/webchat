@@ -3,6 +3,7 @@ package com.bakeev.website.controller;
 import com.bakeev.website.config.SecurityConfig;
 import com.bakeev.website.entity.User;
 import com.bakeev.website.jwt.JwtAuthenticationResponse;
+import com.bakeev.website.service.AuthenticationService;
 import com.bakeev.website.service.JwtService;
 import com.bakeev.website.service.UserService;
 import com.bakeev.website.utils.UserDto;
@@ -15,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -34,13 +36,13 @@ import java.util.UUID;
 public class UserController {
 
     private final UserService userService;
-    private final JwtService jwtService;
+    private final PasswordEncoder passwordEncoder;
     @Value("${file.photo-dir}")
     private String photoDir;
 
-    public UserController(UserService userService, JwtService jwtService) {
+    public UserController(UserService userService, PasswordEncoder passwordEncoder) {
         this.userService = userService;
-        this.jwtService = jwtService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @GetMapping
@@ -59,13 +61,10 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    public JwtAuthenticationResponse updateUser(@PathVariable Long id, @RequestBody UserDto userDto) {
-        User updated = userService.updateUserFromDto(id, userDto);
-        String newToken = jwtService.generateToken(updated);
-        UsernamePasswordAuthenticationToken authenticationToken
-                = new UsernamePasswordAuthenticationToken(updated, null, updated.getAuthorities());
-        SecurityContextHolder.getContext().setAuthentication(authenticationToken);
-        return new JwtAuthenticationResponse(newToken);
+    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody UserDto userDto) {
+        userService.updateUserFromDto(id, userDto);
+        userService.updateEncodedPassword(id, passwordEncoder.encode(userDto.getReal()));
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/{id}/photo")

@@ -21,4 +21,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Transactional
     @Query("UPDATE User u SET u.lastSeen = :newLastSeen WHERE u.username = :username")
     void updateLastSeen(@Param("username") String username, @Param("newLastSeen") LocalDateTime newLastSeen);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE User u SET u.password = :password WHERE u.id = :id")
+    void updateEncodedPassword(@Param("id") Long id, @Param("password") String password);
 }

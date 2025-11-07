@@ -50,8 +50,8 @@ public class AuthenticationService {
         verificationToken.setExpiryDate(LocalDateTime.now().plusHours(249999999));
         tokenRepository.save(verificationToken);
 
-//        String verificationLink = "http://localhost:8080/auth/verify?token=" + token;
-        String verificationLink = "http://192.168.0.16:8080/auth/verify?token=" + token;
+        String verificationLink = "http://localhost:8080/auth/verify?token=" + token;
+//        String verificationLink = "http://192.168.0.107:8080/auth/verify?token=" + token;
         emailService.sendEmail(user.getEmail()
                 , "Подтвердите вашу электронную почту"
                 , "Нажмите на ссылку, чтобы подтвердить \n" + verificationLink);

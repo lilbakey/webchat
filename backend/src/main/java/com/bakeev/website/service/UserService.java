@@ -105,4 +105,8 @@ public class UserService {
         userRepository.updateLastSeen(username, LocalDateTime.now());
     }
 
+    public void updateEncodedPassword(Long id, String password) {
+        userRepository.updateEncodedPassword(id, password);
+    }
+
 }
