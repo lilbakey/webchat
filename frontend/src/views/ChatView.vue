@@ -63,7 +63,7 @@
           msg.sender === currentUser
             ? 'bg-blue-100 border-blue-300 text-gray-800'
             : 'bg-gray-200 border-gray-300 text-black'
-        ]" style="max-width: 70%; word-break: break-word;">
+        ]" style="max-width: 30%; word-break: break-word;">
               <div v-if="msg.attachmentName">
                 <div v-if="isImage(msg.attachmentName)">
                   <img v-if="msg.attachmentUrl" :src="msg.attachmentUrl" alt="image" @load="scrollToBottom"/>
@@ -343,12 +343,14 @@ function parseJwt(token) {
 }
 
 const loadPhoto = async (user) => {
-  try {
-    const res = await api.get(user.value.photo, {responseType: 'blob'})
-    const url = URL.createObjectURL(res.data)
-    photoUrl.value = url
-  } catch (err) {
-    console.error('Ошибка загрузки фото', err)
+  if (receiverInfo && receiverInfo.value.photo) {
+    try {
+      const res = await api.get(user.value.photo, {responseType: 'blob'})
+      const url = URL.createObjectURL(res.data)
+      photoUrl.value = url
+    } catch (err) {
+      console.error('Ошибка загрузки фото', err)
+    }
   }
 }
 
@@ -397,7 +399,7 @@ onMounted(async () => {
   scrollToBottom()
 
   stompClient.value = new Client({
-    webSocketFactory: () => new SockJS(`http://192.168.0.16:8080/ws?token=${token}`),
+    webSocketFactory: () => new SockJS(`http://localhost:8080/ws?token=${token}`),
     // debug: (msg) => console.log("debug = " + msg),
     reconnectDelay: 5000,
     onConnect: async (frame) => {
@@ -424,8 +426,20 @@ onMounted(async () => {
 })
 
 async function subscribeToMessages() {
-  stompClient.value.subscribe('/user/' + currentUser.value + "/queue/messages", (msg) => {
+  stompClient.value.subscribe('/user/' + currentUser.value + "/queue/messages", async (msg) => {
     const messageBody = JSON.parse(msg.body);
+
+    if (messageBody.attachmentId && isImage(messageBody.attachmentName)) {
+      try {
+        const fileRes = await api.get(`/api/files/${messageBody.attachmentId}`, {responseType: 'blob'})
+        const blobUrl = URL.createObjectURL(fileRes.data)
+        messageBody.attachmentUrl = blobUrl
+      } catch (err) {
+        console.error("Ошибка загрузки изображения", err)
+        messageBody.attachmentUrl = null
+      }
+    }
+
     messages.value = [...messages.value, messageBody];
     scrollToBottom()
 
@@ -547,7 +561,7 @@ async function sendMessage() {
     body: JSON.stringify(msg),
   })
 
-  console.log("sending msg = ", msg)
+  isReceiverTyping.value = false
 
   messages.value.push({
     ...msg,

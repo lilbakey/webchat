@@ -104,6 +104,7 @@ import {Eye, EyeOff, CircleUserRound, SquareX} from 'lucide-vue-next'
 import router from "@/router/index.js";
 
 const user = ref(null)
+const newUser = ref(null)
 const currentUser = ref("")
 const showPasswordOld = ref(false)
 const showPasswordNew = ref(false)
@@ -130,11 +131,11 @@ const deletePhoto = async () => {
 const updateUser = async (user) => {
   try {
     console.log(user)
-    user.real = newPassword
-    const res = await api.put(`/api/users/${user.id}`, user)
-    if (res.data.token) {
-      localStorage.setItem("jwt", res.data.token)
-    }
+    newUser.value = user
+    newUser.value.real = newPassword.value
+    console.log("newUser = ", newUser.value)
+    const res = await api.put(`/api/users/${user.id}`, newUser.value)
+    console.log("res", res)
   } catch (err) {
     console.log("Ошибка обновления данных", err)
   }
