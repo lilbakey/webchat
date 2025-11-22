@@ -4,6 +4,7 @@ import com.bakeev.website.entity.ChatMessage;
 import com.bakeev.website.repository.ChatMessageRepository;
 import com.bakeev.website.utils.MessageDto;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -30,5 +31,9 @@ public class ChatService {
             dto.setAttachmentName(message.getFiles().get(0).getOriginalName());
         }
         return dto;
+    }
+
+    public void deleteMessage(Long id) {
+        chatMessageRepository.deleteChatMessageById(id);
     }
 }

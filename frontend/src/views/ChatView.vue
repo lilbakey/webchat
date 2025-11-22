@@ -10,137 +10,147 @@
       <p class="mt-4 text-gray-600 text-lg">Загрузка чата...</p>
     </div>
     <div v-else>
-      <div class="p-8 max-w-7xl mx-auto">
-        <div class="flex items-center justify-between w-full py-4 px-2 border-b border-gray-200">
-          <button
-              @click="$router.back()"
-              class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition-transform transform hover:scale-105 shadow text-sm sm:text-base"
-          >
-            ← Назад
-          </button>
-          <div class="absolute left-1/2 transform -translate-x-1/2 text-center">
-            <div v-if="isReceiverTyping" class="animate-pulse">
-              <h1 class="text-xl sm:text-2xl font-semibold text-gray-700 italic">
-                {{ receiver }} печатает...
-              </h1>
+      <div class="flex items-center justify-between w-full py-4 px-2 border-b border-gray-200">
+        <button
+            @click="$router.back()"
+            class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition-transform transform hover:scale-105 shadow text-sm sm:text-base"
+        >
+          ← Назад
+        </button>
+        <div class="absolute left-1/2 transform -translate-x-1/2 text-center">
+          <div v-if="isReceiverTyping" class="animate-pulse">
+            <h1 class="text-xl sm:text-2xl font-semibold text-gray-700 italic">
+              {{ receiver }} печатает...
+            </h1>
+          </div>
+          <div v-else>
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">{{ receiver }}</h1>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="flex flex-col items-end leading-tight">
+            <div v-if="statusUser === 'Online'">
+              <span class="text-green-500 text-sm sm:text-base font-medium">В сети</span>
             </div>
             <div v-else>
-              <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">{{ receiver }}</h1>
-            </div>
-          </div>
-          <div class="flex items-center gap-3">
-            <div class="flex flex-col items-end leading-tight">
-              <div v-if="statusUser === 'Online'">
-                <span class="text-green-500 text-sm sm:text-base font-medium">В сети</span>
-              </div>
-              <div v-else>
         <span class="text-red-400 text-sm sm:text-base font-medium">
           Был(а) в сети {{ convertLastSeen(receiverInfo.lastSeen) }}
         </span>
-              </div>
-            </div>
-            <div v-if="!receiverInfo || !receiverInfo.photo">
-              <CircleUserRound class="w-12 h-12 sm:w-16 sm:h-16 text-gray-600 group-hover:text-[#ec3606] transition"/>
-            </div>
-            <div v-else>
-              <img
-                  :src="photoUrl"
-                  alt="User Photo"
-                  class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border border-gray-300 shadow-sm"
-              />
             </div>
           </div>
+          <div v-if="!receiverInfo || !receiverInfo.photo">
+            <CircleUserRound class="w-12 h-12 sm:w-16 sm:h-16 text-gray-600 group-hover:text-[#ec3606] transition"/>
+          </div>
+          <div v-else>
+            <img
+                :src="photoUrl"
+                alt="User Photo"
+                class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border border-gray-300 shadow-sm"
+            />
+          </div>
         </div>
-        <div
-            ref="messageContainer"
-            class="bg-white rounded shadow p-4 mb-4 overflow-y-auto border border-gray-300
+      </div>
+      <div
+          v-on:click.right="showContextMenu"
+          ref="messageContainer,menuRef"
+          class="relative bg-white rounded shadow p-4 mb-4 overflow-y-auto border border-gray-300
          h-[50vh] min-h-[300px] max-h-[80vh]
          sm:h-[45vh] md:h-[50vh] lg:h-[55vh] xl:h-[50vh]">
-          <div v-for="(msg, index) in messages" :key="index" class="flex"
-               :class="msg.sender === currentUser ? 'justify-end' : 'justify-start'">
-            <div :class="[
+        <div v-for="(msg, index) in messages" :key="index" class="flex"
+             :class="msg.sender === currentUser ? 'justify-end' : 'justify-start'">
+          <div :class="[
           'mb-2 px-4 py-2 rounded-md border whitespace-pre-wrap break-words text-left',
           msg.sender === currentUser
             ? 'bg-blue-100 border-blue-300 text-gray-800'
             : 'bg-gray-200 border-gray-300 text-black'
         ]" style="max-width: 30%; word-break: break-word;">
-              <div v-if="msg.attachmentName">
-                <div v-if="isImage(msg.attachmentName)">
-                  <img v-if="msg.attachmentUrl" :src="msg.attachmentUrl" alt="image" @load="scrollToBottom"/>
-                </div>
-                <div v-else-if="isVideo(msg.attachmentName)">
-                  <video :src="getFileUrl(msg.attachmentId)" controls class="mt-2 max-w-xs rounded shadow"/>
-                </div>
-                <div v-else-if="isAudio(msg.attachmentName)">
-                  <audio :src="getFileUrl(msg.attachmentId)" controls class="mt-2 w-full"/>
-                </div>
-                <div v-else>
-                  <a :href="getFileUrl(msg.attachmentId)" target="_blank" class="text-blue-500 underline mt-2 block">
-                    Скачать файл: {{ msg.attachmentName }}
-                  </a>
-                </div>
+            <div v-if="msg.attachmentName">
+              <div v-if="isImage(msg.attachmentName)">
+                <img v-if="msg.attachmentUrl" :src="msg.attachmentUrl" alt="image" @load="scrollToBottom"/>
+              </div>
+              <div v-else-if="isVideo(msg.attachmentName)">
+                <video :src="getFileUrl(msg.attachmentId)" controls class="mt-2 max-w-xs rounded shadow"/>
+              </div>
+              <div v-else-if="isAudio(msg.attachmentName)">
+                <audio :src="getFileUrl(msg.attachmentId)" controls/>
               </div>
               <div v-else>
-                {{ msg.content }}
-              </div>
-              <div class="text-xs text-gray-500 mt-1">
-                {{ formatTime(msg.timestamp) }}
+                <a :href="getFileUrl(msg.attachmentId)" target="_blank" class="text-blue-500 underline mt-2 block">
+                  Скачать файл: {{ msg.attachmentName }}
+                </a>
               </div>
             </div>
-          </div>
-        </div>
-        <div class="flex items-center gap-2 mb-2">
-          <input
-              type="file"
-              ref="fileInput"
-              @change="handleFileChange"
-              class="hidden"
-          />
-          <Paperclip
-              @click="triggerFileSelect"
-              class="cursor-pointer w-6 h-6 text-gray-700"
-          />
-          <textarea
-              v-model="message"
-              placeholder="Введите сообщение..."
-              @input="handleTyping"
-              ref="textareaRef"
-              rows="1"
-              @keydown="handleKeydown"
-              class="flex-1 min-h-[2.5rem] border border-gray-300 rounded p-2 resize-none overflow-hidden box-border transition-[height] duration-150 ease-in-out"
-          />
-          <div class="relative flex-shrink-0" ref="emojiTriggerRef">
-            <SmilePlus
-                @click="toggleEmojiPicker"
-                class="w-7 h-7 cursor-pointer"
-            />
-            <div
-                v-if="showEmojiPicker"
-                ref="emojiPickerRef"
-                class="absolute bottom-12 right-0 z-50"
-            >
-              <emoji-picker @emoji-click="addEmoji"/>
+            <div v-else>
+              {{ msg.content }}
             </div>
-          </div>
-          <button
-              @click="sendMessage"
-              class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition"
-          >
-            Отправить
-          </button>
-          <div v-if="uploadedFileUrl" class="text-sm">
-            <p>Файл загружен!</p>
-            <a
-                :href="uploadedFileUrl"
-                target="_blank"
-                class="text-blue-500 underline"
-            >
-              Скачать
-            </a>
+            <div class="text-xs text-gray-500 mt-1">
+              {{ formatTime(msg.timestamp) }}
+            </div>
           </div>
         </div>
       </div>
+      <div class="flex items-center gap-2 mb-2">
+        <input
+            type="file"
+            ref="fileInput"
+            @change="handleFileChange"
+            class="hidden"
+        />
+        <Paperclip
+            @click="triggerFileSelect"
+            class="cursor-pointer w-6 h-6 text-gray-700"
+        />
+        <textarea
+            v-model="message"
+            placeholder="Введите сообщение..."
+            @input="handleTyping"
+            ref="textareaRef"
+            rows="1"
+            @keydown="handleKeydown"
+            class="flex-1 min-h-[2.5rem] border border-gray-300 rounded p-2 resize-none overflow-hidden box-border transition-[height] duration-150 ease-in-out"
+        />
+        <div class="relative flex-shrink-0" ref="emojiTriggerRef">
+          <SmilePlus
+              @click="toggleEmojiPicker"
+              class="w-7 h-7 cursor-pointer"
+          />
+          <div
+              v-if="showEmojiPicker"
+              ref="emojiPickerRef"
+              class="absolute bottom-12 right-0 z-50"
+          >
+            <emoji-picker @emoji-click="addEmoji"/>
+          </div>
+        </div>
+        <button
+            @click="sendMessage"
+            class="bg-[#ec3606] text-white px-4 py-2 rounded hover:bg-[#ec572f] transition"
+        >
+          Отправить
+        </button>
+        <div v-if="uploadedFileUrl" class="text-sm">
+          <p>Файл загружен!</p>
+          <a
+              :href="uploadedFileUrl"
+              target="_blank"
+              class="text-blue-500 underline"
+          >
+            Скачать
+          </a>
+        </div>
+      </div>
     </div>
+    <transition name="fade">
+      <ul v-if="contextMenuOpen"
+          class="absolute right-20 mt-2 w-40 bg-white rounded shadow-lg border border-gray-200 py-2 text-sm z-50">
+        <li>
+          <button @click="deleteMessage"
+                  class="block w-full px-4 py-2 hover:bg-[#ec0606] hover:text-white text-left text-red-600">
+            Удалить сообщение
+          </button>
+        </li>
+      </ul>
+    </transition>
   </div>
 </template>
 
@@ -160,6 +170,8 @@ const route = useRoute()
 const receiver = route.params.username
 const receiverInfo = ref('')
 
+const contextMenuOpen = ref(false)
+const menuRef = ref(null)
 const showEmojiPicker = ref(false)
 const stompClient = ref(null)
 const messageContainer = ref(null)
@@ -179,6 +191,17 @@ const onlineUsers = ref(new Map())
 const isLoading = ref(false)
 const isReceiverTyping = ref(false)
 let typingTimeout = false
+
+
+function showContextMenu() {
+  contextMenuOpen.value = !contextMenuOpen.value
+}
+
+function handleClickOutside(event) {
+  if (menuRef.value && !menuRef.value.contains(event.target)) {
+    contextMenuOpen.value = false
+  }
+}
 
 async function loadReceiverInfo(token) {
   try {
@@ -226,7 +249,6 @@ async function uploadFile() {
 
   const formData = new FormData()
   formData.append('file', selectedFile.value)
-  const token = localStorage.getItem('jwt')
 
   try {
     const res = await api.post(`/api/files/upload`, formData)
@@ -296,6 +318,16 @@ function formatTime(isoString) {
   return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
 }
 
+
+const deleteMessage = async () => {
+  try {
+    console.log("message for delete = ", message.value)
+    // await api.delete(``)
+
+  } catch (err) {
+    console.error("Ошибка удаления сообщения!", err)
+  }
+}
 
 function toggleEmojiPicker() {
   showEmojiPicker.value = !showEmojiPicker.value;
@@ -388,7 +420,7 @@ onMounted(async () => {
   if (Notification.permission !== "granted" && Notification.permission !== "denied") {
     await Notification.requestPermission()
   }
-
+  document.addEventListener('click', handleClickOutside)
   const token = localStorage.getItem('jwt')
   const payload = parseJwt(token)
   currentUser.value = payload?.sub || 'anonymous'

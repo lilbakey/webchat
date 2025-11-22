@@ -8,9 +8,6 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
-    List<ChatMessage> findBySenderAndReceiverOrReceiverAndSender(
-            String sender, String receiver, String receiver2, String sender2);
-
     @Query("""
                 SELECT m FROM ChatMessage m
                 WHERE (m.sender = :user1 AND m.receiver = :user2)
@@ -19,4 +16,5 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
             """)
     List<ChatMessage> findMessagesBetweenUsers(@Param("user1") String user1, @Param("user2") String user2);
 
+    void deleteChatMessageById(Long id);
 }

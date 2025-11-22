@@ -123,4 +123,10 @@ public class ChatController {
 
         return ResponseEntity.ok(dtos);
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteMessage(@PathVariable Long id) {
+        chatService.deleteMessage(id);
+        return ResponseEntity.noContent().build();
+    }
 }

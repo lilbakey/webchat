@@ -29,11 +29,11 @@
         <p class="font-bold my-2">Логин</p>
         <input
             class="w-full pl-2 pr-3 py-2 border border-[#3c3c3d] focus:border-[#ec572f] rounded-md bg-white text-[#3c3c3d] outline-none transition-colors duration-200"
-            type="text" name="username" required v-model="user.username" autocomplete="off" placeholder="Имя">
+            type="text" name="username" required v-model="user.username" readonly autocomplete="off" placeholder="Имя">
         <p class="font-bold my-2">Email</p>
         <input
             class="w-full pl-2 pr-3 py-2 border border-[#3c3c3d] focus:border-[#ec572f] rounded-md bg-white text-[#3c3c3d] outline-none transition-colors duration-200"
-            type="text" name="email" required v-model="user.email" autocomplete="off" placeholder="Email">
+            type="text" name="email" required v-model="user.email" readonly autocomplete="off" placeholder="Email">
         <p class="font-bold my-2">Роль</p>
         <div v-if="user.role === 'ROLE_USER'">
           <input
@@ -92,7 +92,7 @@
     </form>
     <button @click="updateUser(user)"
             class="mt-5 w-full text-white bg-[#ec3606] hover:bg-[#ec572f] font-medium py-2 px-4 rounded transition-transform transform hover:scale-105">
-      Сохранить изменения
+      Сохранить пароль
     </button>
   </div>
 </template>
@@ -130,14 +130,16 @@ const deletePhoto = async () => {
 
 const updateUser = async (user) => {
   try {
-    console.log(user)
     newUser.value = user
     newUser.value.real = newPassword.value
-    console.log("newUser = ", newUser.value)
     const res = await api.put(`/api/users/${user.id}`, newUser.value)
-    console.log("res", res)
+    if (res.status === 200) {
+      alert("Пароль успешно изменен!")
+    }
   } catch (err) {
-    console.log("Ошибка обновления данных", err)
+    if (err.response.data === "Пароли должны отличаться!") {
+      alert("Старый пароль и новый пароль должны отличаться.")
+    }
   }
 }
 

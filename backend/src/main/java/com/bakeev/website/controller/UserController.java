@@ -62,6 +62,12 @@ public class UserController {
 
     @PutMapping("/{id}")
     public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody UserDto userDto) {
+        User currentUser = userService.getUserById(id);
+
+        if (currentUser.getReal().equals(userDto.getReal())) {
+            return ResponseEntity.badRequest().body("Пароли должны отличаться!");
+        }
+
         userService.updateUserFromDto(id, userDto);
         userService.updateEncodedPassword(id, passwordEncoder.encode(userDto.getReal()));
         return ResponseEntity.ok().build();

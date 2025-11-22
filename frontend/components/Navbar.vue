@@ -1,6 +1,6 @@
 <template>
   <nav class="flex items-center justify-between bg-[#333333] shadow px-8 py-4 w-auto mx-auto">
-    <div class="text-xl font-bold text-[#ec572f]">Web Chat</div>
+    <div class="text-3xl font-bold text-[#ec572f]">Web Chat</div>
 
     <div class="relative" ref="menuRef">
       <div v-if="!user || !user.photo">
