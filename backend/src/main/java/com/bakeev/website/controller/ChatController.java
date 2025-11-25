@@ -3,6 +3,7 @@ package com.bakeev.website.controller;
 import com.bakeev.website.entity.ChatMessage;
 import com.bakeev.website.entity.FileEntity;
 import com.bakeev.website.repository.ChatMessageRepository;
+import com.bakeev.website.repository.FileRepository;
 import com.bakeev.website.service.ChatService;
 import com.bakeev.website.service.FileService;
 import com.bakeev.website.service.OnlineUserService;
@@ -12,36 +13,30 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
 
+import java.io.File;
 import java.security.Principal;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
-@Controller
+@RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
 public class ChatController {
 
-    private final SimpMessagingTemplate messagingTemplate;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatService chatService;
     private final FileService fileService;
     private final OnlineUserService onlineUserService;
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final UserService userService;
+    private final FileRepository fileRepository;
 
 
     @MessageMapping("/chat")
@@ -57,12 +52,18 @@ public class ChatController {
             message.setFiles(List.of(file));
         }
 
-        chatMessageRepository.save(message);
+        ChatMessage saved = chatMessageRepository.save(message);
 
-        messagingTemplate.convertAndSendToUser(
+        simpMessagingTemplate.convertAndSendToUser(
                 dto.getReceiver(),
                 "/queue/messages",
-                chatService.toDto(message)
+                chatService.toDto(saved)
+        );
+
+        simpMessagingTemplate.convertAndSendToUser(
+                dto.getSender(),
+                "/queue/messages",
+                chatService.toDto(saved)
         );
     }
 
@@ -80,7 +81,7 @@ public class ChatController {
     public void checkInactiveUsers() {
         LocalDateTime now = LocalDateTime.now();
         onlineUserService.getOnlineUsers().forEach((username, lastPing) -> {
-            if (lastPing.isBefore(now.minusSeconds(5))) {
+            if (lastPing.isBefore(now.minusSeconds(10))) {
                 onlineUserService.userOffline(username);
                 simpMessagingTemplate.convertAndSend("/topic/public",
                         Map.of("username", username, "type", "disconnect"));
@@ -124,9 +125,49 @@ public class ChatController {
         return ResponseEntity.ok(dtos);
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/messages/{id}")
+    @Transactional
     public ResponseEntity<Void> deleteMessage(@PathVariable Long id) {
+        ChatMessage msg = chatMessageRepository.findById(id).orElseThrow();
+        List<FileEntity> files = new ArrayList<>(msg.getFiles());
+        msg.getFiles().clear();
         chatService.deleteMessage(id);
+
+        for (FileEntity file : files) {
+            long count = chatMessageRepository.countByFiles_Id(file.getId());
+            if (count == 0) {
+                deletePhysicalFile(file.getPath());
+                fileRepository.delete(file);
+            }
+        }
+
+        simpMessagingTemplate.convertAndSendToUser(
+                msg.getReceiver(),
+                "/queue/delete-message",
+                Map.of("id", id)
+        );
+
+        simpMessagingTemplate.convertAndSendToUser(
+                msg.getSender(),
+                "/queue/delete-message",
+                Map.of("id", id)
+        );
+
         return ResponseEntity.noContent().build();
     }
+
+    private void deletePhysicalFile(String path) {
+        try {
+            File file = new File(path);
+            if (file.exists()) {
+                boolean deleted = file.delete();
+                if (!deleted) {
+                    System.err.println("Failed to delete file: " + path);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error deleting file: " + e.getMessage());
+        }
+    }
+
 }

@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -21,6 +22,7 @@ public class ChatService {
 
     public MessageDto toDto(ChatMessage message) {
         MessageDto dto = new MessageDto();
+        dto.setId(message.getId());
         dto.setSender(message.getSender());
         dto.setReceiver(message.getReceiver());
         dto.setContent(message.getContent());

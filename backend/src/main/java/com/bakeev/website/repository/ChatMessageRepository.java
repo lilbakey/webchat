@@ -2,8 +2,10 @@ package com.bakeev.website.repository;
 
 import com.bakeev.website.entity.ChatMessage;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -16,5 +18,9 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
             """)
     List<ChatMessage> findMessagesBetweenUsers(@Param("user1") String user1, @Param("user2") String user2);
 
+    @Modifying
+    @Transactional
     void deleteChatMessageById(Long id);
+
+    long countByFiles_Id(Long files_id);
 }
