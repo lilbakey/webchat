@@ -51,8 +51,7 @@
         </div>
       </div>
       <div
-          v-on:click.right="showContextMenu"
-          ref="messageContainer,menuRef"
+          ref="messageContainer"
           class="relative bg-white rounded shadow p-4 mb-4 overflow-y-auto border border-gray-300
          h-[50vh] min-h-[300px] max-h-[80vh]
          sm:h-[45vh] md:h-[50vh] lg:h-[55vh] xl:h-[50vh]">
@@ -63,16 +62,17 @@
           msg.sender === currentUser
             ? 'bg-blue-100 border-blue-300 text-gray-800'
             : 'bg-gray-200 border-gray-300 text-black'
-        ]" style="max-width: 30%; word-break: break-word;">
+        ]" style="max-width: 30%; word-break: break-word;"
+               @contextmenu.prevent="showContextMenu($event, msg)">
             <div v-if="msg.attachmentName">
               <div v-if="isImage(msg.attachmentName)">
                 <img v-if="msg.attachmentUrl" :src="msg.attachmentUrl" alt="image" @load="scrollToBottom"/>
               </div>
               <div v-else-if="isVideo(msg.attachmentName)">
-                <video :src="getFileUrl(msg.attachmentId)" controls class="mt-2 max-w-xs rounded shadow"/>
+                <video :src="msg.attachmentUrl" controls class="mt-2 max-w-xs rounded shadow"/>
               </div>
               <div v-else-if="isAudio(msg.attachmentName)">
-                <audio :src="getFileUrl(msg.attachmentId)" controls/>
+                <audio :src="msg.attachmentUrl" controls/>
               </div>
               <div v-else>
                 <a :href="getFileUrl(msg.attachmentId)" target="_blank" class="text-blue-500 underline mt-2 block">
@@ -89,6 +89,20 @@
           </div>
         </div>
       </div>
+      <transition name="fade">
+        <ul v-if="contextMenuOpen"
+            ref="menuRef"
+            class="absolute bg-white rounded shadow-lg border border-gray-200 py-2 text-sm z-50"
+            :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }"
+        >
+          <li>
+            <button @click="deleteMessage"
+                    class="block w-full px-4 py-2 hover:bg-[#ec0606] hover:text-white text-left text-red-600">
+              Удалить сообщение
+            </button>
+          </li>
+        </ul>
+      </transition>
       <div class="flex items-center gap-2 mb-2">
         <input
             type="file"
@@ -140,17 +154,6 @@
         </div>
       </div>
     </div>
-    <transition name="fade">
-      <ul v-if="contextMenuOpen"
-          class="absolute right-20 mt-2 w-40 bg-white rounded shadow-lg border border-gray-200 py-2 text-sm z-50">
-        <li>
-          <button @click="deleteMessage"
-                  class="block w-full px-4 py-2 hover:bg-[#ec0606] hover:text-white text-left text-red-600">
-            Удалить сообщение
-          </button>
-        </li>
-      </ul>
-    </transition>
   </div>
 </template>
 
@@ -171,6 +174,9 @@ const receiver = route.params.username
 const receiverInfo = ref('')
 
 const contextMenuOpen = ref(false)
+const contextMenuX = ref(0)
+const contextMenuY = ref(0)
+const selectedMessage = ref(null)
 const menuRef = ref(null)
 const showEmojiPicker = ref(false)
 const stompClient = ref(null)
@@ -193,15 +199,23 @@ const isReceiverTyping = ref(false)
 let typingTimeout = false
 
 
-function showContextMenu() {
-  contextMenuOpen.value = !contextMenuOpen.value
+function showContextMenu(event, msg = null) {
+  event.preventDefault();
+
+  selectedMessage.value = msg;
+  contextMenuOpen.value = true;
+
+  contextMenuX.value = event.clientX;
+  contextMenuY.value = event.clientY;
 }
 
 function handleClickOutside(event) {
+  if (event.button !== 0) return;
   if (menuRef.value && !menuRef.value.contains(event.target)) {
-    contextMenuOpen.value = false
+    contextMenuOpen.value = false;
   }
 }
+
 
 async function loadReceiverInfo(token) {
   try {
@@ -296,7 +310,7 @@ function handleTyping() {
 }
 
 function convertLastSeen(lastSeen) {
-  const diffMs = Date.now() - new Date(lastSeen).getTime(); // разница в мс
+  const diffMs = Date.now() - new Date(lastSeen).getTime();
   const diffSec = Math.floor(diffMs / 1000);
   const diffMin = Math.floor(diffSec / 60);
   const diffHours = Math.floor(diffMin / 60);
@@ -321,9 +335,9 @@ function formatTime(isoString) {
 
 const deleteMessage = async () => {
   try {
-    console.log("message for delete = ", message.value)
-    // await api.delete(``)
-
+    contextMenuOpen.value = false
+    await api.delete(`/api/messages/${selectedMessage.value.id}`)
+    messages.value = messages.value.filter(msg => msg.id !== selectedMessage.value.id)
   } catch (err) {
     console.error("Ошибка удаления сообщения!", err)
   }
@@ -338,15 +352,6 @@ function addEmoji(event) {
   showEmojiPicker.value = false
 }
 
-function handleClickOutSide(event) {
-  const picker = emojiPickerRef.value
-  const trigger = emojiTriggerRef.value
-
-  if (picker && !picker.contains(event.target) && trigger && !trigger.contains(event.target)) {
-    showEmojiPicker.value = false
-  }
-}
-
 function scrollToBottom() {
   nextTick(() => {
     const el = messageContainer.value
@@ -355,7 +360,6 @@ function scrollToBottom() {
     }
   })
 }
-
 
 function parseJwt(token) {
   try {
@@ -391,7 +395,7 @@ const loadMessageHistory = async () => {
     const res = await api.get(`/api/messages/${receiver}`)
     messages.value = await Promise.all(
         res.data.map(async (msg) => {
-          if (msg.attachmentId && isImage(msg.attachmentName)) {
+          if (msg.attachmentId && (isImage(msg.attachmentName) || isAudio(msg.attachmentName) || isVideo(msg.attachmentName))) {
             try {
               const fileRes = await api.get(`/api/files/${msg.attachmentId}`, {
                 responseType: "blob",
@@ -420,7 +424,17 @@ onMounted(async () => {
   if (Notification.permission !== "granted" && Notification.permission !== "denied") {
     await Notification.requestPermission()
   }
-  document.addEventListener('click', handleClickOutside)
+  document.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return
+    handleClickOutside(e)
+  })
+  document.addEventListener('mousedown', (e) => {
+    if (!emojiPickerRef.value?.contains(e.target) &&
+        !emojiTriggerRef.value?.contains(e.target)) {
+      showEmojiPicker.value = false
+    }
+  })
+
   const token = localStorage.getItem('jwt')
   const payload = parseJwt(token)
   currentUser.value = payload?.sub || 'anonymous'
@@ -437,6 +451,7 @@ onMounted(async () => {
     onConnect: async (frame) => {
 
       await subscribeToMessages()
+      await subscribeToDeleteMessage()
       await subscribeTyping()
       await getOnlineUsers()
       await connectToChat()
@@ -449,7 +464,6 @@ onMounted(async () => {
   })
   isLoading.value = false
   stompClient.value.activate()
-  document.addEventListener('click', handleClickOutSide)
   await nextTick(() => {
     autoResize()
   })
@@ -484,9 +498,15 @@ async function subscribeToMessages() {
   })
 }
 
+async function subscribeToDeleteMessage() {
+  stompClient.value.subscribe('/user/' + currentUser.value + '/queue/delete-message', (frame) => {
+    const body = JSON.parse(frame.body)
+    messages.value = messages.value.filter(m => m.id !== body.id)
+  })
+}
+
 async function subscribeTyping() {
   stompClient.value.subscribe('/user/' + currentUser.value + "/queue/typing", (msg) => {
-        console.log(msg.body)
         const body = JSON.parse(msg.body);
         if (body.username === receiver) {
           isReceiverTyping.value = body.typing
@@ -537,7 +557,6 @@ function sendPing() {
       destination: '/app/update-ping',
       body: currentUser.value
     })
-    console.log("ping: " + currentUser.value)
   }
 }
 
@@ -545,7 +564,6 @@ function sendPing() {
 onBeforeUnmount(() => {
   if (heartBeatInterval) clearInterval(heartBeatInterval)
   disconnectFromChat()
-  document.removeEventListener('click', handleClickOutSide)
 })
 
 function disconnectFromChat() {
@@ -587,19 +605,13 @@ async function sendMessage() {
     attachmentUrl: tempUrl,
     timestamp: new Date().toISOString()
   }
-
+  console.log("msg = ", msg)
   stompClient.value.publish({
     destination: '/app/chat',
     body: JSON.stringify(msg),
   })
 
   isReceiverTyping.value = false
-
-  messages.value.push({
-    ...msg,
-    attachmentId: fileId.value,
-    attachmentName: selectedFile.value?.name || null,
-  });
 
   await nextTick();
   scrollToBottom();
